@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nanoparticle PBPK Explorer</title>
+<style>
+  .viz-root{
+    color-scheme: light;
+    --surface-1:#fcfcfb; --plane:#f9f9f7;
+    --ink-1:#0b0b0b; --ink-2:#52514e; --ink-muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,0.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])) .viz-root{
+      color-scheme: dark;
+      --surface-1:#1a1a19; --plane:#0d0d0d;
+      --ink-1:#f0efec; --ink-2:#c3c2b7; --ink-muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    }
+  }
+  :root[data-theme="dark"] .viz-root{
+    color-scheme: dark;
+    --surface-1:#1a1a19; --plane:#0d0d0d;
+    --ink-1:#f0efec; --ink-2:#c3c2b7; --ink-muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--plane); color:var(--ink-1);
+       font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;}
+  .viz-root{padding:24px; background:var(--plane); min-height:100vh}
+  header{display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+         max-width:1180px; margin:0 auto 20px}
+  h1{font-size:19px; margin:0 0 3px; letter-spacing:-.01em}
+  .sub{color:var(--ink-2); margin:0; max-width:66ch; font-size:13px}
+  .wrap{display:grid; gap:16px; grid-template-columns:272px 1fr;
+        align-items:start; max-width:1180px; margin:0 auto}
+  @media (max-width:880px){ .wrap{grid-template-columns:1fr} }
+  .card{background:var(--surface-1); border:1px solid var(--ring);
+        border-radius:10px; padding:16px}
+
+  .ctl{margin-bottom:15px}
+  label{display:flex; justify-content:space-between; align-items:baseline;
+        font-size:12px; color:var(--ink-2); margin-bottom:5px}
+  label b{color:var(--ink-1); font-weight:600; font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%; margin:0; accent-color:var(--s1)}
+  .scale{display:flex; justify-content:space-between; font-size:10px;
+         color:var(--ink-muted); margin-top:1px; font-variant-numeric:tabular-nums}
+  select{width:100%; padding:6px; border:1px solid var(--axis); border-radius:6px;
+         background:var(--surface-1); color:var(--ink-1); font:inherit}
+  .hint{font-size:11px; color:var(--ink-muted); margin:5px 0 0}
+
+  button{padding:5px 11px; border:1px solid var(--axis); border-radius:6px;
+         background:var(--surface-1); color:var(--ink-1); font:inherit; cursor:pointer}
+  button:hover{border-color:var(--ink-muted)}
+  .bar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px}
+  .clock{margin-left:auto; color:var(--ink-2); font-size:12px;
+         font-variant-numeric:tabular-nums}
+  .clock b{color:var(--ink-1); font-size:14px}
+
+  .derived{margin-top:16px; padding-top:14px; border-top:1px solid var(--grid)}
+  .derived h2{font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+              color:var(--ink-muted); margin:0 0 9px; font-weight:600}
+  dl{display:grid; grid-template-columns:1fr auto; gap:5px 10px; margin:0; font-size:12px}
+  dt{color:var(--ink-2)} dt i{font-style:italic}
+  dd{margin:0; font-variant-numeric:tabular-nums; text-align:right; color:var(--ink-1)}
+  .note{font-size:11px; color:var(--ink-muted); margin:14px 0 0; padding-top:12px;
+        border-top:1px solid var(--grid); line-height:1.45}
+
+  .grid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .panel{position:relative}
+  .ptitle{display:flex; justify-content:space-between; align-items:baseline;
+          margin-bottom:3px; gap:8px}
+  .pname{font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px}
+  .key{width:14px; height:2px; border-radius:1px; flex:none}
+  .pval{font-size:13px; font-weight:600; font-variant-numeric:tabular-nums}
+  .pmeta{font-size:10px; color:var(--ink-muted); margin-bottom:2px;
+         font-variant-numeric:tabular-nums}
+  svg{display:block; width:100%; height:auto; touch-action:none}
+  .gl{stroke:var(--grid); stroke-width:1}
+  .ax{stroke:var(--axis); stroke-width:1}
+  .tk{fill:var(--ink-muted); font-size:9px; font-variant-numeric:tabular-nums}
+  .ln{fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+  .xh{stroke:var(--ink-muted); stroke-width:1}
+
+  details{max-width:1180px; margin:16px auto 0}
+  summary{cursor:pointer; font-size:12px; color:var(--ink-2); padding:4px 0}
+  table{border-collapse:collapse; font-size:12px; margin-top:8px;
+        font-variant-numeric:tabular-nums; width:100%}
+  th,td{padding:5px 10px; text-align:right; border-bottom:1px solid var(--grid)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--ink-2); font-weight:600}
+</style>
+</head>
+<body>
+<div class="viz-root">
+
+<header>
+  <div>
+    <h1>Nanoparticle PBPK Explorer</h1>
+    <p class="sub">Set the physical properties of an IV-dosed nanoparticle and watch a
+    permeability-limited PBPK model predict where it ends up. Size, charge, and coating
+    act only through biophysics &mdash; Stokes&ndash;Einstein diffusion, gravitational
+    margination, pore sieving, opsonization, and macrophage wrapping.</p>
+  </div>
+  <button id="theme" aria-label="Toggle colour theme">Theme</button>
+</header>
+
+<div class="wrap">
+  <!-- ------------------------------------------------ controls -->
+  <div class="card">
+    <div class="ctl">
+      <label for="D">Diameter <b><span id="vD">80</span> nm</b></label>
+      <input type="range" id="D" min="4" max="300" step="1" value="80">
+      <div class="scale"><span>4</span><span>300 nm</span></div>
+    </div>
+    <div class="ctl">
+      <label for="Z">Zeta potential <b><span id="vZ">&minus;10</span> mV</b></label>
+      <input type="range" id="Z" min="-50" max="50" step="1" value="-10">
+      <div class="scale"><span>&minus;50</span><span>0</span><span>+50 mV</span></div>
+    </div>
+    <div class="ctl">
+      <label for="R">Core density <b><span id="vR">2.0</span> g/cm&sup3;</b></label>
+      <input type="range" id="R" min="1.1" max="5" step="0.1" value="2.0">
+      <div class="scale"><span>1.1 lipid</span><span>5.0 metal</span></div>
+    </div>
+    <div class="ctl">
+      <label for="C">Surface coating</label>
+      <select id="C">
+        <option value="bare">Bare silica</option>
+        <option value="peg" selected>PEG &mdash; dense brush</option>
+        <option value="amine">Exposed amine</option>
+        <option value="albumin">Albumin</option>
+      </select>
+      <p class="hint" id="cHint"></p>
+    </div>
+
+    <div class="derived">
+      <h2>Derived biophysics</h2>
+      <dl>
+        <dt>Diffusivity <i>D</i><sub>B</sub></dt><dd><span id="oD">—</span> &micro;m&sup2;/s</dd>
+        <dt>Sedimentation <i>v</i><sub>sed</sub></dt><dd><span id="oV">—</span> nm/s</dd>
+        <dt>Margination factor</dt><dd>&times;<span id="oM">—</span></dd>
+        <dt>Wrapping time <i>t</i><sub>wrap</sub></dt><dd><span id="oW">—</span> s</dd>
+        <dt>Opsonization</dt><dd>&times;<span id="oO">—</span></dd>
+        <dt>Renal clearance</dt><dd><span id="oR">—</span> mL/h</dd>
+      </dl>
+      <h2 style="margin-top:14px">Sieving &amp; uptake</h2>
+      <dl id="sieveList"></dl>
+    </div>
+
+    <p class="note">Structure follows the tumour-bearing nanomedicine PBPK model of
+    Dogra et al. (<i>Comput Struct Biotechnol J</i> 2020), with the charge- and
+    coating-dependent opsonization term motivated by the shielded- vs
+    exposed-amine result in Dogra et al. (<i>Nat Commun</i> 2018). Rat-scale
+    physiology, 100 %ID bolus. Illustrative, not calibrated for prediction.</p>
+  </div>
+
+  <!-- ------------------------------------------------ charts -->
+  <div class="card">
+    <div class="bar">
+      <button id="play">Pause</button>
+      <button id="reset">Restart</button>
+      <button id="fast">1&times;</button>
+      <span class="clock">t = <b id="vT">0.0</b> h <span id="hoverNote"></span></span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<details>
+  <summary>Table view &mdash; %ID by compartment</summary>
+  <table id="tbl"><thead></thead><tbody></tbody></table>
+</details>
+
+</div>
+<script>
+"use strict";
+// ===========================================================================
+// 1. Physical constants and physiology (rat scale, 200 g)
+// ===========================================================================
+const kB = 1.380649e-23;   // J/K        Boltzmann
+const TK = 310;            // K          body temperature
+const MU = 4e-3;           // Pa*s       whole-blood viscosity
+const GR = 9.81;           // m/s^2
+const RHO_P = 1000;        // kg/m^3     plasma density
+const P_MOTOR = 1e-17;     // W          phagocyte motor-protein power
+const GAMMA   = 0.06e-3;   // N/m        membrane surface tension
+
+const V_PLASMA = 11.8;     // mL
+const GFR      = 78.6;     // mL/h       glomerular filtration rate
+const K_DEG    = 0.012;    // 1/h        degradation in the phagocytic pool
+const K_MPS    = 0.10;     // 1/h        reference Kupffer capture rate
+const LYMPH    = 1/500;    // lymph flow as a fraction of plasma flow
+// Tumour permeability-surface product, back-calculated from Dogra et al. 2020
+// Table 2: P = 1.1e-7 mm/s at 90 nm, S = 40 mm^2/mm^3, V = 2 mL  ->  0.032 mL/h,
+// divided by that particle's sieving fraction to give the unsieved coefficient.
+const PS_TUMOR = 0.0417;   // mL/h
+const K_GLYM   = 0.04;     // mL/h   slow glymphatic clearance from brain
+
+// pore = endothelial fenestration radius (nm); mac = macrophage density, liver = 1
+const ORGANS = [
+  {k:'liver',  name:'Liver',  Q:1300, V:10.0, pore:100,  mac:1.00, drains:true,  color:'--s2',
+   why:'Fenestrated sinusoids plus the densest Kupffer-cell population.'},
+  {k:'spleen', name:'Spleen', Q: 160, V: 2.0, pore:250,  mac:0.30, drains:true,  color:'--s3',
+   why:'Widest sinusoidal slits in the body — traps large and rigid particles.'},
+  {k:'tumor',  name:'Tumor',  Q: 120, V: 2.0, pore:350,  mac:0.00, drains:false, color:'--s4',
+   why:'Leaky neovasculature and no lymphatic drainage — influx is one-way.'},
+  {k:'brain',  name:'Brain',  Q: 400, V: 6.0, pore:0.6,  mac:0.00, drains:false, color:'--s5',
+   why:'Tight junctions; entry only by receptor-mediated transcytosis.'},
+];
+
+const COATINGS = {
+  bare:    {ops:1.60, bbb:1.0, hint:'Adsorbs opsonins readily; fast MPS capture.'},
+  peg:     {ops:0.35, bbb:1.5, hint:'Steric brush resists opsonins — long circulating.'},
+  amine:   {ops:2.60, bbb:1.0, hint:'Surface-exposed amines are rapidly sequestered.'},
+  albumin: {ops:0.80, bbb:6.0, hint:'Partly stealth; engages transcytosis receptors.'},
+};
+
+// ===========================================================================
+// 2. Map particle properties onto rate constants
+// ===========================================================================
+function derive(inp){
+  const {d_nm, zeta, rho_g, coating} = inp;
+  const r = d_nm/2 * 1e-9;                             // m
+  const coat = COATINGS[coating];
+
+  // Stokes-Einstein translational diffusivity
+  const Db = kB*TK/(6*Math.PI*MU*r);                   // m^2/s
+
+  // Stokes settling velocity -> margination toward the vessel wall
+  const v_sed = 2*(rho_g*1000 - RHO_P)*GR*r*r/(9*MU);  // m/s
+  const marg  = 1 + (v_sed*1e9)/50;                    // 1 for small, light NPs
+
+  // Membrane wrapping time, t_wrap = 4*pi*r^2*gamma / p   (Lunov et al.)
+  const t_wrap = 4*Math.PI*r*r*GAMMA/P_MOTOR;          // s
+
+  // Opsonization: coating sets the baseline; |zeta| adds protein adsorption,
+  // and cationic surfaces adsorb more than anionic ones of equal magnitude.
+  const asym  = zeta > 0 ? 1.8 : 1.0;
+  const f_ops = coat.ops*(1 + asym*Math.abs(zeta)/40);
+
+  // Ferry pore sieving: 1 - sigma = (1 - alpha)^2,  alpha = r_np / r_pore
+  const sieve = pore => {
+    const a = (d_nm/2)/pore;
+    return a >= 1 ? 0 : (1-a)*(1-a);
+  };
+
+  // Glomerular filtration: sharp cutoff near 8 nm diameter
+  const CL_renal = GFR/(1 + Math.exp((d_nm - 8)/1.2));
+
+  const kSize = Math.pow(d_nm/80, 0.8);                // bigger -> faster capture
+
+  const organs = ORGANS.map(o => {
+    const s = sieve(o.pore);
+    const L = o.Q*LYMPH;                               // lymph flow, mL/h
+    let kIn, kOut;
+    if (o.k === 'tumor'){
+      // EPR: diffusive influx across leaky neovasculature, and NO lymphatic
+      // drainage — the "retention" half of EPR. Only degradation removes it.
+      kIn = PS_TUMOR*s; kOut = 0;
+    } else {
+      kIn = L*s; kOut = L;                             // convection in, lymph out
+    }
+    if (o.k === 'brain'){
+      kIn += 0.004*coat.bbb;                           // receptor transcytosis
+      kOut = K_GLYM;                                   // slow glymphatic egress
+    }
+    return {...o, sieve:s, kIn, kOut, k_mps:K_MPS*o.mac*f_ops*kSize*marg};
+  });
+
+  return {Db, v_sed, marg, t_wrap, f_ops, CL_renal, organs};
+}
+
+// ===========================================================================
+// 3. ODE system, amounts in %ID.  Explicit RK4.
+//    y = [plasma, tissue_i..., phagocytic_i..., urine, degraded]
+// ===========================================================================
+const N = ORGANS.length;
+const I_URINE = 1 + 2*N, I_DEG = 2 + 2*N, NY = 3 + 2*N;
+
+function rhs(y, P){
+  const dy = new Array(NY).fill(0);
+  const Cp = y[0]/V_PLASMA;
+  let net = 0, degraded = 0;
+
+  for (let i = 0; i < N; i++){
+    const o = P.organs[i], iT = 1+i, iM = 1+N+i;
+    const influx = o.kIn*Cp;                 // extravasation into interstitium
+    const drain  = o.kOut*(y[iT]/o.V);       // lymphatic return to plasma
+    const cap    = o.k_mps*y[0];             // phagocytic capture from blood
+    const degT   = o.drains ? 0 : K_DEG*y[iT];  // retained NPs degrade in situ
+    const degM   = K_DEG*y[iM];              // degradation in the phagocyte
+
+    dy[iT] += influx - drain - degT;
+    dy[iM] += cap - degM;
+    net    += influx - drain + cap;
+    degraded += degT + degM;
+  }
+  const renal = P.CL_renal*Cp;
+  dy[0]       = -net - renal;
+  dy[I_URINE] = renal;
+  dy[I_DEG]   = degraded;
+  return dy;
+}
+
+function step(y, P, h){
+  const add = (a,b,s) => a.map((v,i) => v + s*b[i]);
+  const k1 = rhs(y,P);
+  const k2 = rhs(add(y,k1,h/2), P);
+  const k3 = rhs(add(y,k2,h/2), P);
+  const k4 = rhs(add(y,k3,h),   P);
+  return y.map((v,i) => v + h/6*(k1[i] + 2*k2[i] + 2*k3[i] + k4[i]));
+}
+
+// ===========================================================================
+// 4. Simulation state
+// ===========================================================================
+const T_END = 48, DT = 0.02;
+const SERIES = [{k:'plasma', name:'Plasma', color:'--s1',
+                 why:'Free circulating particles — the systemic exposure.'},
+                ...ORGANS.map(o => ({k:o.k, name:o.name, color:o.color, why:o.why}))];
+
+let P, y, t, trace, playing = true, speed = 1, hoverT = null;
+
+const $ = id => document.getElementById(id);
+
+function readInputs(){
+  return {d_nm:+$('D').value, zeta:+$('Z').value,
+          rho_g:+$('R').value, coating:$('C').value};
+}
+
+function snapshot(){
+  const row = {t, plasma:y[0]};
+  for (let i = 0; i < N; i++) row[ORGANS[i].k] = y[1+i] + y[1+N+i];
+  return row;
+}
+
+function initSim(){
+  P = derive(readInputs());
+  y = new Array(NY).fill(0);
+  y[0] = 100;                       // 100 %ID intravenous bolus
+  t = 0;
+  trace = [snapshot()];
+  showDerived();
+}
+
+function advance(){
+  for (let n = 0; n < 10*speed && t < T_END; n++){
+    y = step(y, P, DT);
+    t = Math.min(t + DT, T_END);
+  }
+  trace.push(snapshot());
+}
+
+// ===========================================================================
+// 5. Readouts
+// ===========================================================================
+// Significant-figure format for readouts. Trailing zeros are stripped only
+// AFTER a decimal point — never from an integer, which would turn 100 into 1.
+function sig(v, n){
+  if (!isFinite(v)) return '—';
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e5 || a < 1e-4) return v.toExponential(1);
+  let s = v.toPrecision(n);
+  if (s.indexOf('e') !== -1) s = String(+s);          // undo 1.0e+2 -> 100
+  if (s.indexOf('.') !== -1) s = s.replace(/0+$/,'').replace(/\.$/,'');
+  return s;
+}
+
+// Axis ticks: clean round numbers, never exponential in this value range.
+function tick(v){
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1000)  return String(+(v/1000).toFixed(1)) + 'K';
+  if (a >= 1)     return String(+v.toFixed(2));
+  if (a >= 0.01)  return String(+v.toFixed(3));
+  return String(+v.toFixed(5));
+}
+
+function showDerived(){
+  $('oD').textContent = sig(P.Db*1e12, 3);
+  $('oV').textContent = sig(P.v_sed*1e9, 3);
+  $('oM').textContent = P.marg.toFixed(2);
+  $('oW').textContent = sig(P.t_wrap, 2);
+  $('oO').textContent = P.f_ops.toFixed(2);
+  $('oR').textContent = P.CL_renal.toFixed(1);
+  $('cHint').textContent = COATINGS[readInputs().coating].hint;
+
+  const dl = $('sieveList');
+  dl.textContent = '';
+  P.organs.forEach(o => {
+    const dt_ = document.createElement('dt');
+    dt_.textContent = o.name + ' 1−σ';
+    const dd = document.createElement('dd');
+    dd.textContent = o.sieve === 0 ? 'excluded' : sig(o.sieve, 2);
+    dl.appendChild(dt_); dl.appendChild(dd);
+  });
+  const brain = P.organs.find(o => o.k === 'brain');
+  const dt2 = document.createElement('dt');
+  dt2.textContent = 'BBB transcytosis PS';
+  const dd2 = document.createElement('dd');
+  dd2.textContent = sig(brain.kIn, 2) + ' mL/h';
+  dl.appendChild(dt2); dl.appendChild(dd2);
+}
+
+// ===========================================================================
+// 6. Small-multiple charts
+// ===========================================================================
+const SVGNS = 'http://www.w3.org/2000/svg';
+const W = 240, H = 150, M = {t:10, r:10, b:20, l:40};
+const pw = W - M.l - M.r, ph = H - M.t - M.b;
+
+function el(tag, attrs, text){
+  const n = document.createElementNS(SVGNS, tag);
+  for (const a in attrs) n.setAttribute(a, attrs[a]);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function niceMax(v){
+  if (v <= 0) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v/e;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10)*e;
+}
+
+function buildPanels(){
+  const grid = $('grid');
+  grid.textContent = '';
+  SERIES.forEach(s => {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+
+    const head = document.createElement('div');
+    head.className = 'ptitle';
+    const nm = document.createElement('span');
+    nm.className = 'pname';
+    const key = document.createElement('span');
+    key.className = 'key';
+    key.style.background = `var(${s.color})`;
+    nm.appendChild(key);
+    nm.appendChild(document.createTextNode(s.name));
+    const val = document.createElement('span');
+    val.className = 'pval';
+    val.id = 'val-' + s.k;
+    head.appendChild(nm); head.appendChild(val);
+
+    const meta = document.createElement('div');
+    meta.className = 'pmeta';
+    meta.id = 'meta-' + s.k;
+
+    const svg = el('svg', {viewBox:`0 0 ${W} ${H}`, id:'svg-'+s.k,
+                           role:'img', 'aria-label':`${s.name}: ${s.why}`});
+    svg.addEventListener('pointermove', ev => {
+      const b = svg.getBoundingClientRect();
+      const x = (ev.clientX - b.left)/b.width*W;
+      hoverT = Math.max(0, Math.min(T_END, (x - M.l)/pw*T_END));
+      render();
+    });
+    svg.addEventListener('pointerleave', () => { hoverT = null; render(); });
+
+    panel.appendChild(head); panel.appendChild(meta); panel.appendChild(svg);
+    grid.appendChild(panel);
+  });
+}
+
+function valueAt(key, tq){
+  if (tq === null || trace.length === 0) return null;
+  let lo = 0, hi = trace.length - 1;
+  while (hi - lo > 1){
+    const mid = (lo + hi) >> 1;
+    if (trace[mid].t < tq) lo = mid; else hi = mid;
+  }
+  const a = trace[lo], b = trace[hi];
+  if (b.t === a.t) return a[key];
+  const f = (tq - a.t)/(b.t - a.t);
+  return a[key] + f*(b[key] - a[key]);
+}
+
+function render(){
+  const last = trace[trace.length - 1];
+  SERIES.forEach(s => {
+    const svg = $('svg-' + s.k);
+    svg.textContent = '';
+    const peak = trace.reduce((m,p) => Math.max(m, p[s.k]), 0);
+    const yMax = niceMax(Math.max(peak, 1e-3));
+    const X = v => M.l + v/T_END*pw;
+    const Y = v => M.t + ph - Math.max(0, Math.min(v, yMax))/yMax*ph;
+
+    // gridlines + y ticks
+    [0, yMax/2, yMax].forEach(v => {
+      svg.appendChild(el('line', {class:'gl', x1:M.l, x2:M.l+pw, y1:Y(v), y2:Y(v)}));
+      svg.appendChild(el('text', {class:'tk', x:M.l-5, y:Y(v)+3,
+                                  'text-anchor':'end'}, tick(v)));
+    });
+    svg.appendChild(el('line', {class:'ax', x1:M.l, x2:M.l+pw, y1:Y(0), y2:Y(0)}));
+    [0,12,24,36,48].forEach(v => {
+      svg.appendChild(el('text', {class:'tk', x:X(v), y:H-5,
+                                  'text-anchor':'middle'}, v));
+    });
+
+    // the series
+    const d = trace.map((p,i) => (i ? 'L' : 'M') +
+                        X(p.t).toFixed(1) + ' ' + Y(p[s.k]).toFixed(1)).join(' ');
+    svg.appendChild(el('path', {class:'ln', d, stroke:`var(${s.color})`}));
+
+    // end marker, 8px with a 2px surface ring
+    svg.appendChild(el('circle', {cx:X(last.t), cy:Y(last[s.k]), r:4,
+                                  fill:`var(${s.color})`,
+                                  stroke:'var(--surface-1)', 'stroke-width':2}));
+
+    // crosshair
+    if (hoverT !== null){
+      svg.appendChild(el('line', {class:'xh', x1:X(hoverT), x2:X(hoverT),
+                                  y1:M.t, y2:M.t+ph}));
+      const hv = valueAt(s.k, hoverT);
+      if (hv !== null){
+        svg.appendChild(el('circle', {cx:X(hoverT), cy:Y(hv), r:4,
+                                      fill:`var(${s.color})`,
+                                      stroke:'var(--surface-1)', 'stroke-width':2}));
+      }
+    }
+
+    const shown = hoverT !== null ? valueAt(s.k, hoverT) : last[s.k];
+    $('val-' + s.k).textContent = (shown === null ? '—' : sig(shown, 3)) + ' %ID';
+    $('meta-' + s.k).textContent = `peak ${sig(peak,3)} %ID · axis 0–${tick(yMax)}`;
+  });
+
+  $('vT').textContent = t.toFixed(1);
+  $('hoverNote').textContent = hoverT !== null
+    ? `· reading at ${hoverT.toFixed(1)} h` : '';
+  buildTable();
+}
+
+// ===========================================================================
+// 7. Table view (every value reachable without hovering)
+// ===========================================================================
+function buildTable(){
+  const marks = [0,1,2,4,8,12,24,48].filter(m => m <= t + 1e-9);
+  const thead = $('tbl').tHead, tbody = $('tbl').tBodies[0];
+  thead.textContent = ''; tbody.textContent = '';
+
+  const hr = thead.insertRow();
+  ['Time (h)', ...SERIES.map(s => s.name)].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h; th.scope = 'col'; hr.appendChild(th);
+  });
+  marks.forEach(m => {
+    const tr = tbody.insertRow();
+    const th = document.createElement('th');
+    th.scope = 'row'; th.textContent = m; tr.appendChild(th);
+    SERIES.forEach(s => {
+      const td = tr.insertCell();
+      const v = valueAt(s.k, m);
+      td.textContent = v === null ? '—' : v.toFixed(2);
+    });
+  });
+}
+
+// ===========================================================================
+// 8. Loop and wiring
+// ===========================================================================
+function frame(){
+  if (playing && t < T_END){ advance(); render(); }
+  else if (playing && t >= T_END){ playing = false; $('play').textContent = 'Play'; }
+  requestAnimationFrame(frame);
+}
+
+function restart(){
+  initSim(); playing = true;
+  $('play').textContent = 'Pause';
+  render();
+}
+
+['D','Z','R','C'].forEach(id => $(id).addEventListener('input', () => {
+  $('vD').textContent = $('D').value;
+  const z = +$('Z').value;
+  $('vZ').textContent = (z < 0 ? '−' : z > 0 ? '+' : '') + Math.abs(z);
+  $('vR').textContent = (+$('R').value).toFixed(1);
+  restart();
+}));
+
+$('play').addEventListener('click', e => {
+  if (t >= T_END) return restart();
+  playing = !playing;
+  e.target.textContent = playing ? 'Pause' : 'Play';
+});
+$('reset').addEventListener('click', restart);
+$('fast').addEventListener('click', e => {
+  speed = speed === 1 ? 4 : speed === 4 ? 10 : 1;
+  e.target.textContent = speed + '×';
+});
+$('theme').addEventListener('click', () => {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+  document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+});
+
+buildPanels();
+initSim();
+render();
+frame();
+</script>
+</body>
+</html>
