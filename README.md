@@ -7,8 +7,6 @@ spleen, tumor, and brain over 48 hours.
 
 The particle properties act only through biophysics: Stokes–Einstein diffusion,
 gravitational margination, pore sieving, opsonization, and macrophage wrapping.
-The model structure follows the tumor-bearing nanomedicine PBPK framework of
-Dogra et al. (2020).
 
 ## Running it
 
